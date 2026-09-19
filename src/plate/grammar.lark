@@ -1,0 +1,77 @@
+// plate grammar: one lexer shared by two start rules.
+//   reader  -> plain datums (s-expressions)
+//   program -> the evaluated subset
+//
+// Keyword terminals are named so the reader can keep them (a reference by
+// name stays in the tree); the evaluated rules write them as string literals,
+// which lark filters out of the tree.
+
+// ================= Lexical grammar =================
+
+DEFINE: "define"
+LAMBDA: "lambda"
+IF: "if"
+LET: "let"
+AND: "and"
+OR: "or"
+NOT: "not"
+CAR: "car"
+CDR: "cdr"
+CONS: "cons"
+NIL: "nil"
+EQ: "eq?"
+ATOM: "atom?"
+INTP: "int?"
+QUOTE: "quote"
+BEGIN: "begin"
+
+OPERATOR: "+" | "-" | "*" | "/"
+BOOLEAN: "#t" | "#f"
+INTEGER: /[0-9]+/
+WORD: /[a-z][a-z?]*/
+QUOTE_MARK: "'"
+DOT: "."
+
+%import common.WS
+%ignore WS
+
+// ================= Reader grammar =================
+
+reader: datum*
+
+?datum: atom
+      | "(" datum* ")"  -> list
+      | "'" datum       -> quoted  // 'd reads as (quote d)
+
+atom: INTEGER | BOOLEAN | WORD | _keyword | OPERATOR | DOT
+
+_keyword: DEFINE | LAMBDA | IF | LET | AND | OR | NOT | CAR | CDR | CONS
+        | NIL | EQ | ATOM | INTP | QUOTE | BEGIN
+
+// ================= Evaluated subset =================
+
+program: form*
+
+?form: definition | expression
+
+?definition: "(" "define" WORD expression ")"                  -> define
+           | "(" "define" "(" WORD formals ")" expression ")"  -> define_function
+           | "(" "begin" definition* ")"                       -> define_block
+
+?expression: INTEGER                                           -> integer
+           | BOOLEAN                                           -> boolean
+           | "nil"                                             -> nil
+           | WORD                                              -> variable
+           | "(" "quote" datum ")"                             -> quote
+           | "'" datum                                         -> quote
+           | "(" "lambda" "(" formals ")" expression ")"       -> lambda_
+           | "(" "if" expression expression expression ")"     -> conditional
+           | "(" "begin" form* expression ")"                  -> sequence
+           | "(" _unary_prim expression ")"                    -> primitive_call
+           | "(" _binary_prim expression expression ")"        -> primitive_call
+           | "(" expression expression* ")"                    -> application
+
+formals: WORD+
+
+_unary_prim: CAR | CDR | ATOM | INTP
+_binary_prim: CONS | EQ | AND | OPERATOR

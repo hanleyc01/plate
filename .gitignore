@@ -8,3 +8,10 @@ wheels/
 
 # Virtual environments
 .venv
+
+# VSCode
+.vscode
+
+# Ruff and pytest
+.pytest_cache
+.ruff_cache

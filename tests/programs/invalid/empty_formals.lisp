@@ -1,0 +1,2 @@
+(define (thunk)
+  42)
