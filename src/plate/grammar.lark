@@ -23,6 +23,8 @@ EQ: "eq?"
 ATOM: "atom?"
 INTP: "int?"
 QUOTE: "quote"
+QUASIQUOTE: "quasiquote"
+UNQUOTE: "unquote"
 BEGIN: "begin"
 
 OPERATOR: "+" | "-" | "*" | "/"
@@ -30,6 +32,8 @@ BOOLEAN: "#t" | "#f"
 INTEGER: /[0-9]+/
 WORD: /[a-z][a-z?]*/
 QUOTE_MARK: "'"
+BACKQUOTE: "`"
+COMMA: ","
 DOT: "."
 
 %import common.WS
@@ -41,12 +45,16 @@ reader: datum*
 
 ?datum: atom
       | "(" datum* ")"  -> list
-      | "'" datum       -> quoted  // 'd reads as (quote d)
+      | "'" datum       -> quoted       // 'd reads as (quote d)
+      | "`" datum       -> quasiquoted  // `d reads as (quasiquote d)
+      | "," datum       -> unquoted     // ,d reads as (unquote d)
 
 atom: INTEGER | BOOLEAN | WORD | _keyword | OPERATOR | DOT
 
-_keyword: DEFINE | LAMBDA | IF | LET | AND | OR | NOT | CAR | CDR | CONS
-        | NIL | EQ | ATOM | INTP | QUOTE | BEGIN
+_keyword: _template_keyword | QUASIQUOTE | UNQUOTE
+
+_template_keyword: DEFINE | LAMBDA | IF | LET | AND | OR | NOT | CAR | CDR
+                 | CONS | NIL | EQ | ATOM | INTP | QUOTE | BEGIN
 
 // ================= Evaluated subset =================
 
@@ -64,6 +72,8 @@ program: form*
            | WORD                                              -> variable
            | "(" "quote" datum ")"                             -> quote
            | "'" datum                                         -> quote
+           | "(" "quasiquote" template ")"                     -> quasiquote
+           | "`" template                                      -> quasiquote
            | "(" "lambda" "(" formals ")" expression ")"       -> lambda_
            | "(" "if" expression expression expression ")"     -> conditional
            | "(" "begin" form* expression ")"                  -> sequence
@@ -75,3 +85,16 @@ formals: WORD+
 
 _unary_prim: CAR | CDR | ATOM | INTP
 _binary_prim: CONS | EQ | AND | OPERATOR
+
+// A quasiquote template is data, except that `,e` / `(unquote e)` marks an
+// expression to evaluate. `unquote` and `quasiquote` can't be plain atoms here,
+// so `(unquote e)` has only one reading. A nested quasiquote is plain data.
+?template: template_atom
+         | "(" template* ")"                                   -> template_list
+         | "'" template                                        -> template_quoted
+         | "(" "quasiquote" datum ")"                          -> template_quasiquoted
+         | "`" datum                                           -> template_quasiquoted
+         | "(" "unquote" expression ")"                        -> unquote
+         | "," expression                                      -> unquote
+
+template_atom: INTEGER | BOOLEAN | WORD | _template_keyword | OPERATOR | DOT

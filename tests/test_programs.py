@@ -19,9 +19,11 @@ from plate.syntax import (
     Nil,
     PrimitiveCall,
     Program,
+    Quasiquote,
     Quote,
     Sequence,
     Symbol,
+    Unquote,
     Variable,
 )
 
@@ -338,6 +340,64 @@ EXPECTED = {
         Quote((Symbol("quote"), Symbol("twice"))),
         Quote((Symbol("nested"), (Symbol("quote"), Symbol("inner")))),
     ),
+    # Quasiquote templates are data except where unquoted: code-building
+    # helpers, the long (quasiquote ...)/(unquote ...) spelling, unquoted
+    # compound expressions, a quote inside a template, a nested quasiquote
+    # (plain data), and a template that is only an unquote.
+    "quasiquote.lisp": (
+        Define(
+            "makesum",
+            fn("a b", Quasiquote((Symbol("+"), Unquote(var("a")), Unquote(var("b"))))),
+        ),
+        Define(
+            "makeadder",
+            fn(
+                "n",
+                Quasiquote(
+                    (
+                        Symbol("lambda"),
+                        (Symbol("x"),),
+                        (Symbol("+"), Symbol("x"), Unquote(var("n"))),
+                    )
+                ),
+            ),
+        ),
+        Define(
+            "point",
+            fn(
+                "x y",
+                Quasiquote(
+                    (
+                        Symbol("point"),
+                        (Symbol("x"), Unquote(var("x"))),
+                        (Symbol("y"), Unquote(var("y"))),
+                    )
+                ),
+            ),
+        ),
+        app(var("makesum"), num(1), prim("*", num(2), num(3))),
+        Quasiquote(
+            (
+                Symbol("total"),
+                Unquote(app(var("makesum"), num(1), num(2))),
+                Symbol("is"),
+                Unquote(prim("+", num(1), num(2))),
+            )
+        ),
+        Quasiquote(
+            (Symbol("literal"), (Symbol("quote"), Symbol("sym")), Unquote(var("x")))
+        ),
+        Quasiquote(
+            (
+                Symbol("outer"),
+                (
+                    Symbol("quasiquote"),
+                    (Symbol("inner"), (Symbol("unquote"), Symbol("x"))),
+                ),
+            )
+        ),
+        Quasiquote(Unquote(var("x"))),
+    ),
 }
 
 VALID = sorted(PROGRAMS.glob("*.lisp"))
@@ -375,6 +435,8 @@ INVALID_CASES = [
     ("empty_formals.lisp", 1, 15, "unexpected ')', expected an identifier", True),
     # quote takes exactly one datum.
     ("quote_arity.lisp", 2, 12, "unexpected 'b', expected ')'", True),
+    # `,` only means something inside a quasiquote.
+    ("unquote_outside.lisp", 2, 6, "unexpected ',', expected an expression", True),
     # Identifiers have no digits: `x1` lexes as `x 1`, leaving an extra `1`.
     ("digit_in_name.lisp", 2, 12, "unexpected '1', expected ')'", True),
     # `_` isn't in the lexical grammar at all.

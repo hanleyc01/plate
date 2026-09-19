@@ -49,6 +49,24 @@ class Quote:
 
 
 @dataclass(frozen=True)
+class Unquote:
+    """`,e` or `(unquote e)` inside a quasiquote template: `e` is evaluated."""
+
+    expr: Expr
+
+
+# A datum that may contain Unquote parts.
+type Template = int | bool | Symbol | Unquote | tuple[Template, ...]
+
+
+@dataclass(frozen=True)
+class Quasiquote:
+    """`` `t `` or `(quasiquote t)`: `t` is data except for its Unquote parts."""
+
+    template: Template
+
+
+@dataclass(frozen=True)
 class Lambda:
     params: tuple[str, ...]
     body: Expr
@@ -86,6 +104,7 @@ type Expr = (
     | Nil
     | Variable
     | Quote
+    | Quasiquote
     | Lambda
     | If
     | Sequence

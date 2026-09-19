@@ -12,9 +12,11 @@ from plate.syntax import (
     Nil,
     PrimitiveCall,
     Program,
+    Quasiquote,
     Quote,
     Sequence,
     Symbol,
+    Unquote,
     Variable,
 )
 
@@ -43,6 +45,14 @@ def test_read_quote_mark_expands_to_quote_list():
         (quote, Symbol("x")),
         (quote, (1, 2)),
         (quote, (quote, Symbol("y"))),
+    )
+
+
+def test_read_quasiquote_and_unquote_expand_to_lists():
+    assert read("`x ,x `(a ,b)") == (
+        (Symbol("quasiquote"), Symbol("x")),
+        (Symbol("unquote"), Symbol("x")),
+        (Symbol("quasiquote"), (Symbol("a"), (Symbol("unquote"), Symbol("b")))),
     )
 
 
@@ -105,6 +115,51 @@ def test_read_integers_and_booleans_are_distinct():
         ("''x", Quote((Symbol("quote"), Symbol("x")))),
         ("(quote 'x)", Quote((Symbol("quote"), Symbol("x")))),
         ("(car '(1 2))", PrimitiveCall("car", (Quote((1, 2)),))),
+        # Unquote inside plain quote is just data.
+        ("'(a ,x)", Quote((Symbol("a"), (Symbol("unquote"), Symbol("x"))))),
+        ("`x", Quasiquote(Symbol("x"))),
+        ("`()", Quasiquote(())),
+        ("`(a ,x)", Quasiquote((Symbol("a"), Unquote(Variable("x"))))),
+        (
+            "(quasiquote (a (unquote x)))",
+            Quasiquote((Symbol("a"), Unquote(Variable("x")))),
+        ),
+        (
+            "`(a ,(+ x 1))",
+            Quasiquote(
+                (Symbol("a"), Unquote(PrimitiveCall("+", (Variable("x"), Integer(1)))))
+            ),
+        ),
+        (
+            "`(a (b (c ,x)))",
+            Quasiquote(
+                (Symbol("a"), (Symbol("b"), (Symbol("c"), Unquote(Variable("x")))))
+            ),
+        ),
+        # Keywords in a template are data, and unquote works inside a quote.
+        (
+            "`(if ,x 'y)",
+            Quasiquote(
+                (Symbol("if"), Unquote(Variable("x")), (Symbol("quote"), Symbol("y")))
+            ),
+        ),
+        (
+            "`'(,x)",
+            Quasiquote((Symbol("quote"), (Unquote(Variable("x")),))),
+        ),
+        # A nested quasiquote is plain data: its unquote isn't evaluated.
+        (
+            "`(a `(b ,x))",
+            Quasiquote(
+                (
+                    Symbol("a"),
+                    (
+                        Symbol("quasiquote"),
+                        (Symbol("b"), (Symbol("unquote"), Symbol("x"))),
+                    ),
+                )
+            ),
+        ),
     ],
 )
 def test_parse_expression(source, expected):
@@ -161,6 +216,14 @@ def test_parse_is_case_insensitive():
         "(quote)",
         "(quote a b)",
         "'",
+        ",x",
+        "(unquote x)",
+        "(f ,x)",
+        "'(a ,x) ,x",
+        "(quasiquote)",
+        "(quasiquote a b)",
+        "`(a ,)",
+        "`",
         "(let ((x 1)) x)",
         "(or a b)",
         "(f 1",
@@ -214,9 +277,10 @@ def test_error_at_end_of_input_points_after_last_character():
     assert str(err).startswith("t.lisp:1:5: unexpected end of input")
 
 
-def test_error_after_quote_expects_a_datum():
+@pytest.mark.parametrize("source", ["(quote)", "(quasiquote)"])
+def test_error_after_quote_expects_a_datum(source):
     with pytest.raises(ParseError) as info:
-        parse("(quote)")
+        parse(source)
     assert info.value.message == "unexpected ')', expected a datum"
 
 

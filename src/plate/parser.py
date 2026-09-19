@@ -21,9 +21,12 @@ from .syntax import (
     Nil,
     PrimitiveCall,
     Program,
+    Quasiquote,
     Quote,
     Sequence,
     Symbol,
+    Template,
+    Unquote,
     Variable,
 )
 
@@ -90,21 +93,23 @@ def _parse(source: str, start: str, filename: str | None):
 
 _KEYWORDS = {
     "DEFINE", "LAMBDA", "IF", "LET", "AND", "OR", "NOT", "CAR",
-    "CDR", "CONS", "NIL", "EQ", "ATOM", "INTP", "QUOTE", "BEGIN",
+    "CDR", "CONS", "NIL", "EQ", "ATOM", "INTP", "QUOTE", "QUASIQUOTE",
+    "UNQUOTE", "BEGIN",
 }  # fmt: skip
+
+_PREFIXES = {"QUOTE_MARK", "BACKQUOTE", "COMMA"}
+_DATUM_STARTERS = {"LPAR", "INTEGER", "BOOLEAN", "WORD", "OPERATOR", "DOT"} | _PREFIXES
 
 # Terminals that can begin a datum / an expression. When all of them are
 # expected, the error says "a datum" / "an expression" instead of listing each.
 # Datums come first: they're a superset, and appear in both grammars (quote).
+# Quasiquote templates are datums whose atoms can't be quasiquote/unquote.
 _STARTERS = (
-    (
-        "a datum",
-        {"LPAR", "INTEGER", "BOOLEAN", "WORD", "OPERATOR", "QUOTE_MARK", "DOT"}
-        | _KEYWORDS,
-    ),
+    ("a datum", _DATUM_STARTERS | _KEYWORDS),
+    ("a datum", _DATUM_STARTERS | _KEYWORDS - {"QUASIQUOTE", "UNQUOTE"}),
     (
         "an expression",
-        {"LPAR", "INTEGER", "BOOLEAN", "WORD", "NIL", "QUOTE_MARK"},
+        {"LPAR", "INTEGER", "BOOLEAN", "WORD", "NIL", "QUOTE_MARK", "BACKQUOTE"},
     ),
 )
 
@@ -180,6 +185,12 @@ class _ReaderTransformer(Transformer):
     def quoted(self, datum: Datum) -> tuple[Datum, ...]:
         return (Symbol("quote"), datum)
 
+    def quasiquoted(self, datum: Datum) -> tuple[Datum, ...]:
+        return (Symbol("quasiquote"), datum)
+
+    def unquoted(self, datum: Datum) -> tuple[Datum, ...]:
+        return (Symbol("unquote"), datum)
+
     def atom(self, token: Token) -> Datum:
         match token.type:
             case "INTEGER":
@@ -219,6 +230,23 @@ class _SyntaxTransformer(_ReaderTransformer):
 
     def quote(self, datum: Datum):
         return Quote(datum)
+
+    def quasiquote(self, template: Template):
+        return Quasiquote(template)
+
+    template_atom = _ReaderTransformer.atom
+
+    def template_list(self, *templates: Template) -> tuple[Template, ...]:
+        return templates
+
+    def template_quoted(self, template: Template) -> tuple[Template, ...]:
+        return (Symbol("quote"), template)
+
+    def template_quasiquoted(self, datum: Datum) -> tuple[Datum, ...]:
+        return (Symbol("quasiquote"), datum)
+
+    def unquote(self, expr):
+        return Unquote(expr)
 
     def lambda_(self, params: tuple[str, ...], body):
         return Lambda(params, body)
