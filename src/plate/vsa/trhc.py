@@ -38,27 +38,19 @@ class TRHC(HRR):
             An TRHC base vector in the time domain.
         """
 
-        k_choices = np.zeros(dim, dtype=int)
+        # Only the non-negative frequencies are drawn; `irfft` mirrors them
+        # into the conjugate-symmetric half, which keeps the result real.
+        k_choices = np.zeros(dim // 2 + 1, dtype=int)
         k_choices[0] = 0
-
-        half_len = dim // 2
+        k_choices[1:] = rng.choice(modulus, dim // 2)
 
         if dim % 2 == 0:
-            k_choices[1:half_len] = rng.choice(modulus, half_len - 1)
-            # The Nyquist bin is its own conjugate, so its phase must be 0 or pi.
-            k_choices[half_len] = (
-                0 if rng.random() > 0.5 else (modulus // 2 if modulus % 2 == 0 else 0)
-            )
-            k_choices[half_len + 1 :] = -k_choices[half_len - 1 : 0 : -1]
-        else:
-            # Odd dim has half_len free bins (1..half_len), with no Nyquist bin.
-            k_choices[1 : half_len + 1] = rng.choice(modulus, half_len)
-            k_choices[half_len + 1 :] = -k_choices[half_len:0:-1]
+            # The Nyquist bin is its own conjugate, so its phase must be 0 or
+            # pi. Odd moduli admit no phase of pi, leaving 0 as the only choice.
+            k_choices[-1] = 0
 
         phases = 2 * np.pi * k_choices / modulus
-        z_freq = np.exp(1j * phases)
-        z_time = np.fft.ifft(z_freq)
-        return z_time.real
+        return np.fft.irfft(np.exp(1j * phases), n=dim)
 
     @classmethod
     def generate_basis(cls, dim: int) -> None:

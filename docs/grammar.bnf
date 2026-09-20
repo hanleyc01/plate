@@ -1,0 +1,88 @@
+; ================= Lexical grammar =================
+; Input is lower-cased and whitespace between tokens is skipped.
+
+<token>       ::= "(" | ")" | "'" | "`" | "," | "." | <operator>
+                | <boolean> | <integer> | <word>
+<operator>    ::= "+" | "-" | "*" | "/"
+<boolean>     ::= "#t" | "#f"
+<integer>     ::= <digit> | <digit> <integer>
+<word>        ::= <letter> <word-tail>
+<word-tail>   ::= ε | <letter> <word-tail> | "?" <word-tail>
+<letter>      ::= "a" | "b" | ... | "z"
+<digit>       ::= "0" | "1" | ... | "9"
+
+<keyword>     ::= "define" | "lambda" | "if" | "let" | "and" | "or" | "not"
+                | "car" | "cdr" | "cons" | "nil" | "eq?" | "atom?" | "int?"
+                | "quote" | "quasiquote" | "unquote" | "begin"
+<identifier>  ::= <word>  ; any <word> that is not a <keyword>
+
+; ================= Reader grammar =================
+
+<program>     ::= <datum-seq>
+<datum>       ::= <atom>
+                | "(" <datum-seq> ")"
+                | "'" <datum>             ; reads as (quote <datum>)
+                | "`" <datum>             ; reads as (quasiquote <datum>)
+                | "," <datum>             ; reads as (unquote <datum>)
+<datum-seq>   ::= ε | <datum> <datum-seq>
+<atom>        ::= <integer> | <boolean> | <word> | <operator> | "."
+
+; ================= Evaluated subset =================
+
+<program>     ::= <form-seq>
+<form-seq>    ::= ε | <form> <form-seq>
+<form>        ::= <definition> | <expression>
+
+<definition>  ::= "(" "define" <identifier> <expression> ")"
+                | "(" "define" "(" <identifier> <formals> ")" <expression> ")"
+                | "(" "begin" <definition-seq> ")"
+
+<definition-seq> ::= ε | <definition> <definition-seq>
+
+<expression>  ::= <literal>
+                | <identifier>
+                | <quotation>
+                | <quasiquotation>
+                | <lambda>
+                | <conditional>
+                | <sequence>
+                | <primitive-call>
+                | <application>
+
+<quotation>   ::= "(" "quote" <datum> ")"
+                | "'" <datum>
+
+<quasiquotation> ::= "(" "quasiquote" <template> ")"
+                   | "`" <template>
+
+<sequence>    ::= "(" "begin" <body> ")"
+<body>        ::= <expression>
+                | <form> <body>
+
+<literal>     ::= <integer> | <boolean> | "nil"
+
+<lambda>      ::= "(" "lambda" "(" <formals> ")" <expression> ")"
+<formals>     ::= <identifier> | <identifier> <formals>
+
+<conditional> ::= "(" "if" <expression> <expression> <expression> ")"
+
+<primitive-call> ::= "(" <unary-prim> <expression> ")"
+                   | "(" <binary-prim> <expression> <expression> ")"
+<unary-prim>  ::= "car" | "cdr" | "atom?" | "int?"
+<binary-prim> ::= "cons" | "eq?" | "and" | "+" | "-" | "*" | "/"
+
+<application> ::= "(" <expression> <operands> ")"
+<operands>    ::= ε | <expression> <operands>
+
+; ================= Quasiquote templates =================
+
+<template>    ::= <template-atom>
+                | "(" <template-seq> ")"
+                | "'" <template>
+                | "(" "quasiquote" <datum> ")"
+                | "`" <datum>
+                | "(" "unquote" <expression> ")"
+                | "," <expression>
+<template-seq>  ::= ε | <template> <template-seq>
+<template-atom> ::= <integer> | <boolean> | <operator> | "."
+                  | <word>  ; any <word> except "quasiquote" and "unquote"

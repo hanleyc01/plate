@@ -5,11 +5,16 @@ import sys
 from collections.abc import Callable
 from dataclasses import dataclass, fields
 from pprint import pprint
+from typing import Literal
 
+from .encoding import Encoder
 from .parser import ParseError, parse
 
-INTEGER_SCHEMES = ("list", "residue")
-LIST_SCHEMES = ("rfp", "kanerva")
+INTEGER_SCHEMES: tuple[Literal["list"], Literal["residue"]] = (
+    "list",
+    "residue",
+)
+LIST_SCHEMES: tuple[Literal["rfp"], Literal["kanerva"]] = ("rfp", "kanerva")
 
 PROMPT = "plate> "
 CONTINUATION_PROMPT = "  ... "
@@ -29,7 +34,9 @@ class CommandError(Exception):
 
 def _choose(args: list[str], choices: tuple[str, ...], command: str) -> str:
     if len(args) != 1 or args[0] not in choices:
-        raise CommandError(f"usage: {COMMAND_PREFIX}{command} {'|'.join(choices)}")
+        raise CommandError(
+            f"usage: {COMMAND_PREFIX}{command} {'|'.join(choices)}"
+        )
     return args[0]
 
 
@@ -125,6 +132,7 @@ def evaluate(source: str, state: ReplState) -> None:
         return
     for form in program.forms:
         pprint(form)
+    _ = Encoder().encode(program)
 
 
 def read_source() -> str:
