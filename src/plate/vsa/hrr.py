@@ -1,17 +1,24 @@
 """Holographic Reduced Representations."""
 
 import math
-from typing import Self, cast, override
+from typing import Literal, Self, cast, override
 
 import numpy as np
 import numpy.typing as npt
-from numpy.fft import fft, ifft
+from numpy.fft import fft, ifft, irfft, rfft
 
 from .vsa import VSA
 
-__all__ = ["HRR"]
+__all__ = ["HRR", "SCHEMES", "Scheme"]
 
 type ArrayF64 = npt.NDArray[np.float64]
+
+type Scheme = Literal["unitary", "gaussian"]
+SCHEMES: tuple[Scheme, ...] = ("unitary", "gaussian")
+"""How a fresh vector-symbol is drawn. Unitary vectors have a flat magnitude
+spectrum, which makes `HRR.inv` their exact inverse rather than an approximate
+one; Gaussian vectors are the classical choice.
+"""
 
 
 class HRR(VSA[np.float64]):
@@ -45,6 +52,24 @@ class HRR(VSA[np.float64]):
         data /= np.linalg.norm(data)
         return cls(data)
 
+    @classmethod
+    def unitary(cls, size: int) -> Self:
+        """Create a new HRR whose magnitude spectrum is flat.
+
+        Every frequency has a magnitude of one, so binding neither amplifies
+        nor attenuates any of them: `HRR.inv` is then the exact inverse of
+        binding rather than an approximate one, and the norm survives any
+        number of bindings.
+
+        Args:
+            size (int): The dimensionality of the new HRR vector-symbol.
+
+        Returns:
+            A new unitary HRR vector-symbol.
+        """
+        spectrum = rfft(np.random.normal(size=size))
+        return cls(irfft(spectrum / np.abs(spectrum), n=size))
+
     @override
     @classmethod
     def from_array(cls, array: ArrayF64) -> Self:
@@ -60,16 +85,26 @@ class HRR(VSA[np.float64]):
 
     @override
     @classmethod
-    def new(cls, dim: int) -> Self:
+    def new(cls, dim: int, scheme: Scheme = "unitary") -> Self:
         """Create a new vector-symbol.
 
         Args:
             dim (int): The dimensionality of the new vector-symbol.
+            scheme (Scheme): Defaults to `"unitary"`, how the vector-symbol is
+                drawn. See `SCHEMES`.
 
         Returns:
             A new HRR vector-symbol.
+
+        Raises:
+        -   ValueError: If `scheme` is not one of `SCHEMES`.
         """
-        return cls.normal(dim)
+        # Checked at runtime because the scheme reaches here as a string from
+        # the command line, where the type is not enforced.
+        if scheme not in SCHEMES:
+            raise ValueError(f"scheme must be one of {SCHEMES}, got {scheme!r}")
+
+        return cls.unitary(dim) if scheme == "unitary" else cls.normal(dim)
 
     @override
     @staticmethod

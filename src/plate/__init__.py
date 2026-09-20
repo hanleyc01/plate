@@ -27,6 +27,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="List encoding scheme (default: %(default)s)",
     )
     parser.add_argument(
+        "-v",
+        "--vector-scheme",
+        choices=repl.VECTOR_SCHEMES,
+        default=repl.VECTOR_SCHEMES[0],
+        help="Vector generation scheme (default: %(default)s)",
+    )
+    parser.add_argument(
         "-i",
         "--interpret",
         metavar="TEXT",
@@ -61,7 +68,9 @@ def main() -> None:
             parser.error("--repl cannot be used with a file")
         repl.run(
             repl.ReplState(
-                integer_scheme=args.integer_scheme, list_scheme=args.list_scheme
+                integer_scheme=args.integer_scheme,
+                list_scheme=args.list_scheme,
+                vector_scheme=args.vector_scheme,
             )
         )
         return

@@ -1,11 +1,11 @@
 """Additive Time-domain Residue Hyperdimensional Computing"""
 
-from typing import ClassVar, Self
+from typing import ClassVar, Self, override
 
 import numpy as np
 import numpy.typing as npt
 
-from .hrr import HRR
+from .hrr import HRR, Scheme
 
 __all__ = ["TRHC"]
 
@@ -22,6 +22,22 @@ class TRHC(HRR):
     data: ArrayF64
     moduli: ClassVar[list[int]] = [3, 5, 7, 11]
     basis: ClassVar[list[ArrayF64]] = []
+
+    @override
+    @classmethod
+    def new(cls, dim: int, scheme: Scheme = "unitary") -> Self:
+        """Create a new vector-symbol.
+
+        Args:
+            dim (int): The dimensionality of the new vector-symbol.
+            scheme (Scheme): Ignored. A Gaussian vector is not unitary, and so
+                would leave the residue cycle as soon as it was bound to
+                itself. The argument is kept only to match `HRR.new`.
+
+        Returns:
+            A new unitary TRHC vector-symbol.
+        """
+        return cls.unitary(dim)
 
     @staticmethod
     def generate_base_vector(

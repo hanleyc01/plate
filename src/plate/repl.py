@@ -9,6 +9,7 @@ from typing import Literal
 
 from .encoding import Encoder
 from .parser import ParseError, parse
+from .vsa.hrr import SCHEMES as VECTOR_SCHEMES
 
 INTEGER_SCHEMES: tuple[Literal["list"], Literal["residue"]] = (
     "list",
@@ -25,6 +26,7 @@ COMMAND_PREFIX = "]"
 class ReplState:
     integer_scheme: str = INTEGER_SCHEMES[0]
     list_scheme: str = LIST_SCHEMES[0]
+    vector_scheme: str = VECTOR_SCHEMES[0]
     running: bool = True
 
 
@@ -83,6 +85,13 @@ def cmd_list(state: ReplState, args: list[str]) -> None:
     state.list_scheme = _choose(args, LIST_SCHEMES, "list")
 
 
+def cmd_vector(state: ReplState, args: list[str]) -> None:
+    if not args:
+        print(state.vector_scheme)
+        return
+    state.vector_scheme = _choose(args, VECTOR_SCHEMES, "vector")
+
+
 COMMANDS: dict[str, Command] = {
     "help": Command(
         cmd_help,
@@ -108,6 +117,11 @@ COMMANDS: dict[str, Command] = {
         cmd_list,
         f"{COMMAND_PREFIX}list [{'|'.join(LIST_SCHEMES)}]",
         "Set the list encoding scheme, or show it if no argument is given",
+    ),
+    "vector": Command(
+        cmd_vector,
+        f"{COMMAND_PREFIX}vector [{'|'.join(VECTOR_SCHEMES)}]",
+        "Set how vector-symbols are drawn, or show it if no argument is given",
     ),
 }
 

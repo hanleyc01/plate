@@ -1,4 +1,7 @@
-from plate.repl import CONTINUATION_PROMPT, ReplState, run
+import pytest
+
+from plate import build_parser
+from plate.repl import CONTINUATION_PROMPT, VECTOR_SCHEMES, ReplState, run
 
 
 def run_repl(monkeypatch, *lines: str) -> list[str]:
@@ -53,3 +56,40 @@ def test_commands_still_work(monkeypatch, capsys):
     out = capsys.readouterr().out
     assert "'residue'" in out
     assert len(prompts) == 3
+
+
+def test_vector_command_shows_and_sets_the_scheme(monkeypatch, capsys):
+    run_repl(monkeypatch, "]vector", "]vector gaussian", "]vector")
+    out = capsys.readouterr().out.split()
+
+    assert out == ["unitary", "gaussian"]
+
+
+def test_vector_command_rejects_an_unknown_scheme(monkeypatch, capsys):
+    run_repl(monkeypatch, "]vector bipolar")
+
+    assert "usage: ]vector unitary|gaussian" in capsys.readouterr().err
+
+
+def test_vector_scheme_defaults_to_unitary():
+    assert ReplState().vector_scheme == "unitary" == VECTOR_SCHEMES[0]
+
+
+# ================= Command line =================
+
+
+def test_cli_takes_a_vector_scheme():
+    assert build_parser().parse_args(["-r", "-v", "gaussian"]).vector_scheme == (
+        "gaussian"
+    )
+
+
+def test_cli_defaults_to_unitary():
+    assert build_parser().parse_args(["-r"]).vector_scheme == "unitary"
+
+
+def test_cli_rejects_an_unknown_vector_scheme(capsys):
+    with pytest.raises(SystemExit):
+        _ = build_parser().parse_args(["-r", "-v", "bipolar"])
+
+    assert "invalid choice: 'bipolar'" in capsys.readouterr().err

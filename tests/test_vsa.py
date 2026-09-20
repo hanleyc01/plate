@@ -31,6 +31,69 @@ def reset_trhc_basis():
     TRHC.basis = []
 
 
+# ================= HRR generation =================
+
+
+def test_new_draws_unitary_vectors_by_default():
+    np.random.seed(0)
+    x = HRR.new(DIM)
+
+    assert x.data.dtype == np.float64
+    assert x.data.shape == (DIM,)
+    assert np.abs(np.fft.rfft(x.data)) == pytest.approx(1.0)
+    assert np.linalg.norm(x.data) == pytest.approx(1.0)
+
+
+def test_new_draws_gaussian_vectors_when_asked():
+    np.random.seed(0)
+    x = HRR.new(DIM, "gaussian")
+
+    assert np.linalg.norm(x.data) == pytest.approx(1.0)
+    assert np.abs(np.fft.rfft(x.data)) != pytest.approx(1.0)
+
+
+def test_new_rejects_an_unknown_scheme():
+    with pytest.raises(ValueError, match="scheme must be one of"):
+        _ = HRR.new(DIM, "bipolar")
+
+
+@pytest.mark.parametrize("scheme", ["unitary", "gaussian"])
+def test_both_schemes_are_equally_pseudo_orthogonal(scheme):
+    """Restricting to a flat spectrum halves the degrees of freedom, but it
+    leaves the concentration of similarity at 1 / sqrt(DIM) untouched.
+    """
+    np.random.seed(0)
+    sims = [
+        HRR.similarity(HRR.new(DIM, scheme).data, HRR.new(DIM, scheme).data)
+        for _ in range(200)
+    ]
+
+    assert np.mean(sims) == pytest.approx(0.0, abs=NOISE)
+    assert np.std(sims) == pytest.approx(NOISE, rel=0.2)
+
+
+def test_a_unitary_vector_keeps_its_norm_under_repeated_binding():
+    np.random.seed(0)
+    unitary, gaussian = HRR.new(DIM).data, HRR.new(DIM, "gaussian").data
+
+    bound_unitary, bound_gaussian = unitary, gaussian
+    for _ in range(6):
+        bound_unitary = HRR.bind(bound_unitary, unitary)
+        bound_gaussian = HRR.bind(bound_gaussian, gaussian)
+
+    assert np.linalg.norm(bound_unitary) == pytest.approx(1.0)
+    assert np.linalg.norm(bound_gaussian) > 2.0
+
+
+def test_trhc_stays_unitary_whatever_the_scheme():
+    """A Gaussian TRHC vector would leave the residue cycle when bound."""
+    np.random.seed(0)
+    x = TRHC.new(DIM, "gaussian")
+
+    assert isinstance(x, TRHC)
+    assert np.abs(np.fft.rfft(x.data)) == pytest.approx(1.0)
+
+
 # ================= HRR similarity =================
 
 
@@ -78,20 +141,35 @@ def test_bind_is_dissimilar_to_both_of_its_operands():
     assert HRR.similarity(bound, y) == pytest.approx(0.0, abs=5 * NOISE)
 
 
-def test_unbind_approximately_recovers_the_other_operand():
-    """`inv` is only an approximate inverse for vectors that are not unitary,
-    which recovers around 0.7 rather than 1.0 whatever the dimension.
+def test_unbind_only_approximately_recovers_a_gaussian_operand():
+    """For a vector whose spectral magnitudes vary, `inv` is approximate. The
+    gain each frequency picks up is exponentially distributed, whose deviation
+    equals its mean, leaving a recovery of 1 / sqrt(2) at any dimension.
+    """
+    np.random.seed(0)
+    x = HRR.new(DIM, "gaussian").data
+    y = HRR.new(DIM, "gaussian").data
+    bound = HRR.bind(x, y)
+
+    assert HRR.similarity(HRR.unbind(bound, y), x) == pytest.approx(
+        1 / np.sqrt(2), abs=0.1
+    )
+
+
+def test_unbind_exactly_recovers_a_unitary_operand():
+    """A flat magnitude spectrum makes that gain constant, so the involution
+    is the exact inverse.
     """
     np.random.seed(0)
     x, y = HRR.new(DIM).data, HRR.new(DIM).data
     bound = HRR.bind(x, y)
 
-    assert HRR.similarity(HRR.unbind(bound, y), x) > 0.5
-    assert HRR.similarity(HRR.unbind(bound, x), y) > 0.5
+    assert HRR.similarity(HRR.unbind(bound, y), x) == pytest.approx(1.0)
+    assert HRR.similarity(HRR.unbind(bound, x), y) == pytest.approx(1.0)
 
 
-def test_unbind_exactly_recovers_a_unitary_operand():
-    """TRHC vectors are unitary, so binding and unbinding are exact."""
+def test_unbind_of_encoded_numbers_is_exact():
+    """TRHC numbers are built from unitary base vectors, so they inherit it."""
     TRHC.generate_basis(DIM)
     x, y = TRHC.number(3, DIM).data, TRHC.number(5, DIM).data
 
